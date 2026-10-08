@@ -7,7 +7,7 @@
 - Ubuntu 24.04 x86_64(듀얼부팅 가능), 인터넷
 - `git`, `curl`, `python3.12`(Ubuntu 24.04 기본). 없으면 `sudo apt install git curl python3.12`
 - 작업공간 파일시스템 여유 **약 3 GB**
-  - 실측: `.venv` 1.2 GB + uv 캐시 약 1.2 GB + `external/` 0.17 GB + `.tools/` 0.05 GB
+  - 새로 설치할 때 실측: `.venv` 1.2 GB + uv 캐시 1.1 GB + `external/` 33 MB + `.tools/` 47 MB ≈ 2.4 GB
 - 필요 없는 것: ROS, GPU, NVIDIA 드라이버, CUDA, conda
 - 실기를 하려면 추가로 필요하다.
   - 리더·팔로워 팔과 각 보드, 어댑터, USB 케이블

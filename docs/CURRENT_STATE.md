@@ -4,7 +4,7 @@
 
 | 구분 | 상태 |
 |---|---|
-| 소프트웨어(연구실) | `SOFTWARE_PARTIAL` — 설치·비구동 검증 통과, 별도 clone 재설치 검증 진행 전 |
+| 소프트웨어(연구실) | **`SOFTWARE_PREPARED`** — 고정 설치·비구동 검사·별도 clone 재설치(별도 venv·별도 캐시) 통과 |
 | 실기 | `NOT VERIFIED` — 연구실 PC에 로봇 미연결 |
 | 친구 PC 재현 | `NOT VERIFIED` |
 | GitHub | `PUSH_PENDING: 저장소 URL 또는 신규 저장소 이름/소유자/공개 범위 필요` |
@@ -18,6 +18,13 @@
 - `~/.bashrc`가 ROS Jazzy를 source해서 `PYTHONPATH`·`LD_LIBRARY_PATH`가 설정되어 있다. 래퍼와 설치기가 제거하고 실행한다(doctor로 확인).
 - 시리얼: `/dev/serial` 없음, ttyACM/ttyUSB 없음(로봇 미연결). 계정이 `dialout` 그룹이 아니다.
 - brltty 설치, ModemManager active. 실제 간섭은 관찰되지 않았다(로봇 미연결).
+
+## 커밋
+
+- `b549589`: 검증용 커밋(설치기·래퍼·문서)
+- `fa45b20`: clone 검증에서 발견한 stamp 경고 순서 수정
+- 이 문서 갱신 커밋(최종)
+- 브랜치 `main`, remote 없음
 
 ## 진행 기록
 
@@ -69,6 +76,27 @@
 - **설정·hardware doctor**: 문자열 time_s, bool fps, 관절 dict 키 누락을 거부한다. 같은 실제 장치를 가리키는 서로 다른 링크, port null, 없는 포트, 권한 없음(테스트 pty chmod 000), 다른 프로세스의 점유를 각각 진단하고, 포트는 열지 않는다.
 - **teleop 사전 점검**: 보정 파일 없음·불일치면 공식 명령을 실행하지 않고 모터 쓰기도 0건이다. 조건을 충족하면 공식 인자로 실행한다.
 
+## 별도 clone 재설치 검증 (2026-10-08)
+
+| 회차 | 대상 커밋 | 결과 |
+|---|---|---|
+| 1 | `b549589` → `/mnt/isaac/so101_verify_20261008_153641` | uv·LeRobot 소스·패키지를 새 캐시로 받아 설치 42초, doctor FAIL 0. WARN 1(설치기가 doctor 뒤에 stamp를 쓰는 순서 문제) → `fa45b20`에서 수정 |
+| 2 | `fa45b20` → `/mnt/isaac/so101_verify_20261008_153907` | 설치 43초. doctor FAIL 0 / WARN 0, exit 0. 재실행 시 전 단계 재사용. `verify_offline` 58/58 PASS. 설치 후 clone의 `git status` 깨끗함 |
+
+두 환경(연구실 작업공간 vs 회차 2 clone) 비교 결과:
+- Python 3.12.3, torch 2.11.0+cpu, torchvision 0.26.0+cpu, `torch.version.cuda=None`이 같다.
+- 배포본 46개 모두 **버전과 설치 파일 내용 해시가 같다**(RECORD 기준, 경로 메타데이터 제외). sdist에서 빌드한 feetech-servo-sdk도 같다.
+- `lerobot-teleoperate --help` 출력이 같다(작업공간 경로 치환 후).
+- stamp(SHA, uv.lock·pyproject sha256, uv, Python)가 같다.
+
+임시 clone은 검증 후 정리했다. 결과 파일은 연구실 작업공간 `.tmp/verify_results/`에 있다(Git 제외).
+
+### 실측 디스크 사용량
+
+- 새로 설치할 때: `.venv` 1.2 GB + `.cache/uv` 1.1 GB + `external/` 33 MB + `.tools/` 47 MB ≈ 2.4 GB
+- 연구실 작업공간: 2.6 GB(초기 하드링크 캐시 포함)
+- 설치기 사전 점검 기준은 여유 3,000 MB다.
+
 ## 미검증·한계
 
 - 실기 전부(`NOT VERIFIED`): 실제 보드 VID:PID·by-id 고유성, 모터 응답, 보정, 추종, 실제 루프 Hz, 3분 추종, 종료·재실행.
@@ -78,6 +106,8 @@
 
 ## 다음 행동
 
-1. (진행 중) 이 커밋을 별도 경로로 clone해 별도 venv·별도 캐시로 재설치·비교
-2. GitHub 저장소 대상 지정 → push
-3. 실물 확인표 작성(HARDWARE.md) → 실기 PC에서 dialout → probe → 보정 → 추종
+1. 사용자: GitHub 저장소 대상 지정(기존 URL, 또는 새 저장소의 소유자·이름·공개 범위) → 일반 push
+2. 실물 확인표 작성(docs/HARDWARE.md): 모터 라벨 전압, 어댑터 정격·극성, 보드 모델, 조립·판매자 기설정 여부
+3. 실기 PC(친구 PC 또는 로봇을 연결한 연구실 PC)에서 docs/REPRODUCE.md 순서 진행
+   - dialout → ports → probe → 보정 → teleop 30초 → 3분 → 재실행
+   - 결과를 별도 커밋으로 남긴다
