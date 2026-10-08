@@ -1,0 +1,27 @@
+# SO-101 리더→팔로워 설정 예시.
+# 사용: cp configs/robot.example.yaml configs/robot.local.yaml 후 robot.local.yaml을 PC마다 채운다(robot.local.yaml은 Git 제외).
+# null = 아직 지정하지 않음. probe/setup-motors/calibrate/teleop은 port·id가 null이면 실행을 거부한다(--dry-run은 표시만).
+# 다른 PC의 포트 경로를 복사하지 말고 `scripts/so101 ports`로 다시 확인한다.
+
+leader:
+  type: so101_leader          # 공식 teleop 타입(고정)
+  id: null                    # 장치 ID 문자열(예: so101_leader_a). 물리 팔 라벨과 같게. 보정 파일명 <id>.json이 된다(모터 ID 1~6과 다름)
+  port: null                  # 예: /dev/serial/by-id/usb-<제조사>_<제품>_<serial>-if00  (고유하지 않으면 /dev/serial/by-path/...)
+
+follower:
+  type: so101_follower        # 공식 robot 타입(고정)
+  id: null                    # 예: so101_follower_a
+  port: null
+  disable_torque_on_disconnect: true   # 공식 기본값. false는 허용하지 않음
+  # 이동량 제한: null(제한 없음) | 양수 하나(6관절 모두) | 6개 관절 dict.
+  # 매 주기 "현재 위치 기준 목표 오프셋"만 제한한다(공식 ensure_safe_goal_position). 속도·충돌 안전을 보장하지 않는다.
+  # 단위: 몸체 5관절은 보정 기준 도(°), gripper는 0~100 정규화 값. 공식 권장값은 없다.
+  # dict 예(값은 출처 없는 실기 후보이며 검증 전):
+  #   max_relative_target: {shoulder_pan: 5.0, shoulder_lift: 5.0, elbow_flex: 5.0, wrist_flex: 5.0, wrist_roll: 5.0, gripper: 5.0}
+  max_relative_target: null
+
+teleop:
+  fps: 60                     # 공식 기본값(--fps). 실제 루프 Hz는 logs/runs.jsonl에 기록된다
+  time_s: null                # null(무제한) 또는 초(--teleop_time_s). 상한 도달 시 토크가 해제되어 팔이 처질 수 있다
+
+calibration_root: null        # null이면 <작업공간>/calibration. 공식 HF_LEROBOT_CALIBRATION으로 전달된다

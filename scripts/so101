@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SO-101 래퍼 진입점. ROS(source된 PYTHONPATH/LD_LIBRARY_PATH)와 사용자 site-packages를 격리하고
+# 작업공간 .venv의 Python으로 scripts/so101.py를 실행한다. 사용법: scripts/so101 --help
+set -euo pipefail
+WS="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+PY="$WS/.venv/bin/python"
+if [[ ! -x "$PY" ]]; then
+  echo "[so101] $WS/.venv가 없습니다. 먼저 scripts/install.sh를 실행하세요." >&2
+  exit 1
+fi
+mkdir -p "$WS/.tmp"
+exec env -u PYTHONPATH -u PYTHONHOME -u LD_LIBRARY_PATH -u VIRTUAL_ENV \
+  PYTHONNOUSERSITE=1 \
+  SO101_WS="$WS" \
+  HF_HOME="$WS/.cache/huggingface" \
+  HF_HUB_OFFLINE=1 \
+  UV_CACHE_DIR="${UV_CACHE_DIR:-$WS/.cache/uv}" \
+  TMPDIR="$WS/.tmp" \
+  "$PY" "$WS/scripts/so101.py" "$@"

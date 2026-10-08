@@ -1,0 +1,45 @@
+# SO-101 실행 환경 잠금용 가상 프로젝트(패키지가 아님).
+# - 이 파일과 같은 폴더의 uv.lock이 설치 기준이다. scripts/install.sh는 `uv sync --locked`만 실행하며 재해결하지 않는다.
+# - 다시 해결(relock)하는 경우는 `scripts/install.sh --relock`(유지보수용)뿐이다.
+#
+# LeRobot 설치 방식:
+#   PyPI의 lerobot 0.6.1 휠(해시 고정)을 설치한다. 이 휠의 패키지 파일 504개는 고정 SHA
+#   7e241bd630a3719a56157a497ce5d08f244784f1 의 src/lerobot 파일과 바이트 단위로 같음을 확인했다(docs/REFERENCES.md).
+#   external/lerobot(같은 SHA checkout)은 원본 참조와 설치본 동일성 검증(scripts/so101 doctor)에 쓴다.
+#   path 의존성으로 쓰지 않는 이유: uv가 그 pyproject의 tool.uv.sources(torch=cu128 인덱스)를 함께 적용해
+#   CPU 인덱스 지정과 충돌한다(원본은 수정하지 않는다).
+[project]
+name = "so101-env"
+version = "0.0.0"
+description = "Pinned runtime for SO-101 leader->follower teleoperation with official LeRobot"
+requires-python = "==3.12.*"
+dependencies = [
+    "lerobot[feetech]==0.6.1",
+    # lerobot core 의존성이다. CPU 인덱스로 한정하기 위해 여기에도 이름만 명시한다(버전 범위는 lerobot이 정한다).
+    "torch",
+    "torchvision",
+]
+
+[tool.uv]
+package = false
+# 이 lock은 Linux x86_64만 대상으로 한다.
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+# 휠이 없는 패키지는 feetech-servo-sdk 1.0.0(sdist, legacy setup.py) 하나뿐이다(relock 시 검사).
+# 그 빌드 격리 환경의 setuptools를 런타임 lock과 같은 버전으로 고정한다(최신 빌드 도구를 매번 받지 않게 함).
+build-constraint-dependencies = ["setuptools==81.0.0"]
+# 공식 uv.lock과 같은 버전이 선택되도록 resolver 기준 시각을 고정 커밋 시각(2026-08-03T14:05:01Z)으로 둔다.
+# lerobot 0.6.1 휠은 릴리스 직후(14:19:54Z) 업로드되어 그 패키지만 예외를 둔다.
+exclude-newer = "2026-08-03T14:05:01Z"
+exclude-newer-package = { lerobot = "2026-08-03T14:30:00Z" }
+# 공식 uv.lock은 datasets 상한 때문에 fsspec 2026.2.0을 잠갔다. 같은 버전으로 맞춘다.
+constraint-dependencies = ["fsspec==2026.2.0"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+# explicit: tool.uv.sources로 지정한 torch/torchvision만 이 인덱스를 쓴다. 나머지는 PyPI.
+explicit = true

@@ -1,0 +1,21 @@
+# 환경·도구·외부 원본
+.venv/
+.venv.broken-*/
+.tools/
+external/
+# 캐시·임시
+.cache/
+.tmp/
+__pycache__/
+*.pyc
+# PC별·실기 산출물
+configs/*.local.yaml
+calibration/
+calibration-backup*/
+logs/
+*.tar.gz
+# 비밀정보
+.env
+.env.*
+*.pem
+*.key
