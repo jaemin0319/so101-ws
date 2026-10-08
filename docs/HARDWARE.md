@@ -53,7 +53,7 @@
 
 ## 4. 모터 상태와 설정
 
-- `scripts/so101 probe <role>`은 읽기 전용이다. ping, 모델 번호, 펌웨어, 현재 위치, 토크, 동작 모드, 보정 레지스터를 읽는다.
+- `scripts/so101 probe follower`와 `scripts/so101 probe leader`는 읽기 전용이다. ping, 모델 번호, 펌웨어, 현재 위치, 토크, 동작 모드, 보정 레지스터를 읽는다.
 - 6개가 응답하고 모델이 일치하면 **setup-motors를 건너뛴다.**
 - 정상 응답은 "해당 ID가 응답했다"는 뜻일 뿐이다. 중복 ID 부재, 관절 물리 배치, 6개 실물 존재를 완전히 증명하지 않는다. 판매자 정보, 라벨, 관절별 작은 움직임 확인과 함께 판단한다.
 - 응답이 없으면 다음 순서로 확인한다.
@@ -62,7 +62,7 @@
   3. 보드 모드(점퍼)
   4. 포트
   5. `probe --scan`(공식 `scan_port`: 호스트 포트 baud만 바꿔 broadcast ping, 모터 EEPROM에 쓰지 않음)
-- ID 누락·충돌이 확인된 경우에만 `scripts/so101 setup-motors <role>`(공식)를 실행한다.
+- ID 누락·충돌이 확인된 팔에만 공식 setup을 실행한다: 팔로워는 `scripts/so101 setup-motors follower`, 리더는 `scripts/so101 setup-motors leader`.
   - 안내에 따라 gripper부터 **모터 하나만** 보드에 연결하고 Enter를 누른다. ID와 baud(1,000,000)를 그 모터에 쓴다.
   - 전원 켜진 상태의 케이블 재배선은 보드·모터 제조사 지침을 따른다.
 - 펌웨어 버전이 서로 다르면 공식 `connect`의 handshake가 실패한다(calibrate/teleop 불가).
@@ -76,7 +76,7 @@
 
 ## 5. 보정
 
-공식 `lerobot-calibrate`로 보정한다(`scripts/so101 calibrate <role>`).
+공식 `lerobot-calibrate`로 보정한다. 팔로워는 `scripts/so101 calibrate follower`, 리더는 `scripts/so101 calibrate leader`.
 
 - 팔로워는 연결 시 공식 configure가 토크를 켜고, 재보정에서 토크를 끈다. 이때 팔이 처질 수 있으므로 받친다.
 - 파일 위치(공식 규칙):

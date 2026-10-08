@@ -20,6 +20,27 @@ SO-ARM101 리더 팔을 손으로 움직이면 팔로워 팔이 따라 움직이
 
 상태와 검증 결과는 [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)에 있다. 다른 PC에서 재현하는 절차는 [docs/REPRODUCE.md](docs/REPRODUCE.md)에 있다.
 
+## 현재 상태 (2026-10-08, 연구실 PC)
+
+| 구분 | 상태 |
+|---|---|
+| 소프트웨어 | `SOFTWARE_PREPARED` — 고정 설치, 무로봇 검사 `tools/verify_offline.py` 58/58 PASS, 별도 clone·별도 캐시 재설치 통과(46개 배포본 버전·파일 해시가 같음) |
+| 실제 로봇 | `NOT VERIFIED` — 모터 통신·보정·추종을 아직 실행하지 않음 |
+| 친구 PC 재현 | `NOT VERIFIED` |
+| Ubuntu 22.04 / ROS 2 Humble | **지원 검증 전**. 검증한 환경은 Ubuntu 24.04 x86_64뿐이다. 22.04 기본 Python은 3.10이고 LeRobot v0.6.1은 Python 3.12 이상이 필요하므로, `python3.12`가 없으면 `scripts/install.sh`가 중단된다 |
+
+## LeRobot 설치 방식
+
+- **고정 버전**: 태그 `v0.6.1` = 커밋 `7e241bd630a3719a56157a497ce5d08f244784f1`. `scripts/install.sh`가 이 SHA를 `external/lerobot/`(Git 제외)에 받는다. 원본 참조와 검증용이며 수정하지 않는다.
+- **설치 산출물**: PyPI `lerobot-0.6.1-py3-none-any.whl`. sha256은 `lock/uv.lock`에 고정되어 있다.
+- **PyPI 휠을 쓰는 이유**: `external/lerobot`을 path(또는 git) 의존성으로 설치하면 uv가 그 `pyproject.toml`의 `tool.uv.sources`를 함께 적용한다. 그 설정이 linux torch를 CUDA 12.8 인덱스로 지정하고 있어서, CPU 인덱스 지정과 충돌한다(실측). 원본을 고치지 않고 CPU 환경을 만들기 위해 같은 릴리스의 휠을 쓴다.
+- **소스 동일성 검사**: 휠의 패키지 파일 504개가 고정 SHA의 `src/lerobot` 파일과 sha256이 같음을 확인했다. `scripts/so101 doctor`가 실행될 때마다 설치된 504개 파일을 `external/lerobot`과 바이트 단위로 다시 비교한다.
+- **의존성 잠금**
+  - `lock/pyproject.toml`: `lerobot[feetech]==0.6.1`과 torch·torchvision. 이 두 패키지만 CPU 인덱스(`https://download.pytorch.org/whl/cpu`)로 받고 나머지는 PyPI에서 받는다.
+  - `lock/uv.lock`: resolver 기준 시각을 고정 커밋 시각으로 두고 실제로 해결한 결과다. 46개 패키지, 모두 해시가 있다.
+  - 설치는 `uv sync --locked`만 하며 재해결하지 않는다.
+  - 공식 `uv.lock`과의 차이는 torch·torchvision의 CPU 변형(그리고 CPU 빌드에 필요 없는 CUDA 패키지 제외)뿐이다. 근거는 [docs/REFERENCES.md](docs/REFERENCES.md)에 있다.
+
 ## 0. 준비물
 
 - Ubuntu 24.04 x86_64, `git`, `curl`, `python3.12`(기본 포함), 인터넷

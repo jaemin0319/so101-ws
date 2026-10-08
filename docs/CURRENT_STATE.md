@@ -7,7 +7,37 @@
 | 소프트웨어(연구실) | **`SOFTWARE_PREPARED`** — 고정 설치·비구동 검사·별도 clone 재설치(별도 venv·별도 캐시) 통과 |
 | 실기 | `NOT VERIFIED` — 연구실 PC에 로봇 미연결 |
 | 친구 PC 재현 | `NOT VERIFIED` |
+| Ubuntu 22.04 / ROS 2 Humble | 지원 검증 전(검증 환경은 Ubuntu 24.04 x86_64뿐). 22.04 기본 Python은 3.10이라 `python3.12`가 없으면 설치기가 중단된다 |
 | GitHub | `PUSH_PENDING: 저장소 URL 또는 신규 저장소 이름/소유자/공개 범위 필요` |
+
+## 기준 버전과 설치 방식
+
+- LeRobot 태그 `v0.6.1` = `7e241bd630a3719a56157a497ce5d08f244784f1`. 원본 참조와 검증용으로 `external/lerobot/`(Git 제외)에 받는다.
+- 설치는 PyPI `lerobot-0.6.1` 휠(해시 고정)로 한다.
+  - 이유: path·git 설치 시 원본 `tool.uv.sources`(torch=cu128)가 CPU 인덱스와 충돌하기 때문이다.
+  - 동일성: 휠 파일 504개 = 고정 SHA `src/lerobot`(sha256)이다. doctor가 매번 다시 비교한다.
+- 의존성: `lock/pyproject.toml`과 `lock/uv.lock`(46개, 해시 포함), `uv sync --locked`. Python 3.12, uv 0.12.23, torch 2.11.0+cpu, torchvision 0.26.0+cpu, extras `[feetech]`.
+
+## 명령 요약 (각각 별도로 실행)
+
+```bash
+scripts/install.sh                       # 설치·재사용·부분 설치 복구
+scripts/install.sh --repair              # 파일 손상 의심 시 캐시 없이 재설치
+scripts/so101 doctor                     # 소프트웨어 점검(로봇 불필요)
+scripts/so101 doctor --scope hardware    # 포트·권한·점유·설정·보정 파일(포트를 열지 않음)
+scripts/so101 ports                      # USB 시리얼 장치 목록(읽기 전용)
+scripts/so101 find-port                  # 공식 lerobot-find-port
+scripts/so101 probe follower             # 모터 읽기 전용 확인
+scripts/so101 probe leader
+scripts/so101 setup-motors follower      # ID 누락·충돌이 확인된 경우에만
+scripts/so101 setup-motors leader        # ID 누락·충돌이 확인된 경우에만
+scripts/so101 calibrate follower         # 공식 보정(팔 받치기)
+scripts/so101 calibrate leader
+scripts/so101 teleop --dry-run           # 공식 명령·인자 파싱만 확인
+scripts/so101 teleop --time-s 30         # 공식 추종(짧은 첫 시험)
+```
+
+종료: 리더를 쉬는 자세로 → 팔로워를 받침 → `Ctrl+C`. 래퍼가 양팔 토크 해제를 독립적으로 재시도하고 결과를 기록한다(실패 시 종료 코드 3). 응답이 없으면 팔로워 전원을 차단한다.
 
 ## 연구실 PC 환경 (2026-10-08 확인)
 
@@ -23,8 +53,9 @@
 
 - `b549589`: 검증용 커밋(설치기·래퍼·문서)
 - `fa45b20`: clone 검증에서 발견한 stamp 경고 순서 수정
-- 이 문서 갱신 커밋(최종)
-- 브랜치 `main`, remote 없음
+- `68767d5`: SOFTWARE_PREPARED와 clone 재설치 결과 기록
+- 이후: GitHub 업로드용 문서 정리, 업로드 상태 기록
+- 브랜치 `main`
 
 ## 진행 기록
 
