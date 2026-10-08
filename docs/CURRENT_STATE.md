@@ -8,7 +8,7 @@
 | 실기 | `NOT VERIFIED` — 연구실 PC에 로봇 미연결 |
 | 친구 PC 재현 | `NOT VERIFIED` |
 | Ubuntu 22.04 / ROS 2 Humble | 지원 검증 전(검증 환경은 Ubuntu 24.04 x86_64뿐). 22.04 기본 Python은 3.10이라 `python3.12`가 없으면 설치기가 중단된다 |
-| GitHub | `PUSH_PENDING: 저장소 URL 또는 신규 저장소 이름/소유자/공개 범위 필요` |
+| GitHub | **`PUSHED`** — https://github.com/jaemin0319/so101-ws (private), 브랜치 `main`. 2026-10-08 업로드 후 원격 HEAD = 로컬 HEAD 확인(`e4a27a6`, 파일 16개) |
 
 ## 기준 버전과 설치 방식
 
@@ -54,8 +54,9 @@ scripts/so101 teleop --time-s 30         # 공식 추종(짧은 첫 시험)
 - `b549589`: 검증용 커밋(설치기·래퍼·문서)
 - `fa45b20`: clone 검증에서 발견한 stamp 경고 순서 수정
 - `68767d5`: SOFTWARE_PREPARED와 clone 재설치 결과 기록
-- 이후: GitHub 업로드용 문서 정리, 업로드 상태 기록
-- 브랜치 `main`
+- `e4a27a6`: GitHub 업로드용 문서 정리(첫 push 시점의 HEAD)
+- 이후: 업로드 상태(PUSHED) 기록
+- 브랜치 `main`, remote `origin` = https://github.com/jaemin0319/so101-ws.git (private, `gh repo create --private --source . --remote origin --push`로 생성)
 
 ## 진행 기록
 
@@ -137,8 +138,7 @@ scripts/so101 teleop --time-s 30         # 공식 추종(짧은 첫 시험)
 
 ## 다음 행동
 
-1. 사용자: GitHub 저장소 대상 지정(기존 URL, 또는 새 저장소의 소유자·이름·공개 범위) → 일반 push
-2. 실물 확인표 작성(docs/HARDWARE.md): 모터 라벨 전압, 어댑터 정격·극성, 보드 모델, 조립·판매자 기설정 여부
-3. 실기 PC(친구 PC 또는 로봇을 연결한 연구실 PC)에서 docs/REPRODUCE.md 순서 진행
+1. 실물 확인표 작성(docs/HARDWARE.md): 모터 라벨 전압, 어댑터 정격·극성, 보드 모델, 조립·판매자 기설정 여부
+2. 실기 PC(친구 PC 또는 로봇을 연결한 연구실 PC)에서 `git clone https://github.com/jaemin0319/so101-ws.git ~/so101_ws` 후 docs/REPRODUCE.md 순서 진행(비공개 저장소이므로 해당 PC에서 GitHub 접근 권한 필요)
    - dialout → ports → probe → 보정 → teleop 30초 → 3분 → 재실행
    - 결과를 별도 커밋으로 남긴다
