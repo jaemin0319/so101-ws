@@ -189,7 +189,7 @@ fi
 # ---- 6. 실제 상태 검증(소프트웨어 점검) 후 stamp 기록 ----
 log "소프트웨어 점검(scripts/so101 doctor --scope software)"
 set +e
-"$WS/scripts/so101" doctor --scope software
+SO101_INSTALLING=1 "$WS/scripts/so101" doctor --scope software
 rc=$?
 set -e
 if [[ $rc -ne 0 && $rc -ne 2 ]]; then

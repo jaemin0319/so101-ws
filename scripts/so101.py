@@ -506,6 +506,8 @@ def doctor_software(rep: Report) -> None:
             rep.add(OK, "설치 stamp가 현재 lock·SHA와 일치", f"설치 시각 {st.get('installed_at')}")
         else:
             rep.add(WARN, "설치 stamp가 현재 lock과 다름", "scripts/install.sh 재실행 권장(위 sync 확인이 실제 판정)")
+    elif os.environ.get("SO101_INSTALLING") == "1":
+        rep.add(INFO, "설치 stamp는 이 점검 통과 후 install.sh가 기록함")
     else:
         rep.add(WARN, "설치 stamp 없음", "scripts/install.sh가 끝까지 완료되지 않았을 수 있습니다.")
 
