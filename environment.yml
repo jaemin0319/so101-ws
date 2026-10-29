@@ -1,0 +1,19 @@
+# SO-101 연구 환경 — conda 계층(Ubuntu 24.04 x86_64). Python 패키지는 여기서 설치하지 않는다.
+#   만들기·갱신: scripts/setup_ubuntu.sh (conda env create/update → pip lock 설치 → 점검)
+#   이름은 setup_ubuntu.sh --env-name 으로 바꿀 수 있다(아래 name은 이 컴퓨터와 같은 기본값).
+#
+# 이 파일에 넣는 것은 pip로 고정할 수 없는 것만이다.
+#   - python 3.12.15: 맥 연구 환경(데이터 수집)과 같은 CPython 3.12.15
+#   - pip 26.2.1: lock 설치(--require-hashes --no-deps)에 쓰는 pip
+#   - ffmpeg 8.1.1: torchcodec 0.11.1(영상 디코더)이 쓰는 FFmpeg 공유 라이브러리. 시스템 apt 없이 이 환경 안에서만 쓴다.
+#     (PyAV는 FFmpeg를 휠에 포함하므로 이것과 무관하다)
+# torch·torchvision·LeRobot 등 Python 패키지는 모두 requirements/linux-cu128.lock.txt(pip, 해시 고정)로 설치한다.
+# conda에서 torch·numpy 등을 설치하지 않는다(같은 패키지를 conda와 pip가 서로 덮어쓰지 않게).
+name: jammin_so-arm
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12.15
+  - pip=26.2.1
+  - ffmpeg=8.1.1

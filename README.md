@@ -1,185 +1,182 @@
-# SO-101 리더→팔로워 추종 환경 (공식 LeRobot 고정 버전)
+# so101-ws
 
-SO-ARM101 리더 팔을 손으로 움직이면 팔로워 팔이 따라 움직이는(teleoperation) 최소 환경이다.
-모터 통신·ID 설정·보정·추종 루프는 **공식 LeRobot v0.6.1 코드를 그대로** 쓴다. 이 저장소에는 다음만 있다.
-- 설치기
-- 비구동 점검
-- 읽기 전용 모터 확인
-- 공식 CLI 실행 래퍼와 기록
-- 문서
+SO-ARM101(SO-101)로 **공을 집어 그릇에 넣는 모방학습(ACT) 모델을 실행**하는 작업 공간이다.
+- 이 저장소를 만든 컴퓨터(아래 0절)에서 실제로 쓴 설정을 그대로 담았다. 포트·카메라 경로, 보정 파일, 명령, 문제 해결 기록이 모두 들어 있다.
+- 새 Ubuntu 24.04 x86_64 + NVIDIA GPU에서 1절 순서대로 하면 같은 환경이 만들어진다.
+- 모델 가중치와 데이터셋은 Hugging Face에서 받는다. 받을 버전(커밋)은 `config/so101.env`에 고정돼 있다.
 
-카메라, 데이터셋, 학습(ACT 등), ROS 브리지는 범위 밖이다.
+작업 경과와 측정값은 [docs/WORKLOG.md](docs/WORKLOG.md)에, 무엇을 어디서 검증했는지는 [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)에 있다.
+
+## 0. 기준 컴퓨터(2026-10, 실측)
 
 | 항목 | 값 |
 |---|---|
-| LeRobot | v0.6.1 = `7e241bd630a3719a56157a497ce5d08f244784f1` (PyPI 휠이 이 SHA 소스와 바이트 단위로 같음을 확인. [docs/REFERENCES.md](docs/REFERENCES.md)) |
-| Python | 3.12 (Ubuntu 24.04 시스템 `python3.12`) + 작업공간 `.venv` |
-| uv | 0.12.23 (작업공간 `.tools/uv`, 공식 체크섬 검증) |
-| 의존성 | `lerobot[feetech]==0.6.1`, torch 2.11.0+cpu, torchvision 0.26.0+cpu. GPU·CUDA·ROS 불필요 |
-| 잠금 | [lock/uv.lock](lock/uv.lock) (해시 포함, 46개). 설치는 `uv sync --locked`만 하며 재해결하지 않음 |
+| OS | Ubuntu 24.04.5 LTS x86_64, 커널 7.0.0-38-generic |
+| GPU | NVIDIA GeForce RTX 5060 Laptop GPU (8 GB, sm_120), 드라이버 595.99.02 |
+| conda | Miniforge 26.7.2-1(`~/miniforge3`, conda 26.7.2), 환경 **`jammin_so-arm`** |
+| Python 패키지 | Python 3.12.15, LeRobot 0.6.1, torch 2.11.0+cu128, torchvision 0.26.0+cu128 등 99개(해시 고정) |
+| 팔 | SO-101 leader 1대 + follower 1대, 각각 Feetech STS3215 모터 6개(ID 1~6), CH343 USB 시리얼 보드 |
+| follower 포트 | `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90151504-if00` (12V 전원, 모터 12.0~12.2V) |
+| leader 포트 | `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90151751-if00` (5V 전원, 모터 6.1~6.2V) |
+| 카메라 | Innomaker U20CAM-720P 2대, 640×480 30fps **MJPG** |
+| front 카메라 | `/dev/v4l/by-path/pci-0000:00:14.0-usb-0:2.4:1.0-video-index0` (작업면 위에서 내려다봄, 180도 회전) |
+| wrist 카메라 | `/dev/v4l/by-path/pci-0000:00:14.0-usb-0:2.1:1.0-video-index0` (그리퍼 시점) |
+| USB 연결 | 네 장치 모두 노트북 USB 포트 하나에 꽂은 USB 2.0 허브(Genesys 05e3:0610)에 연결: 2.1 = wrist, 2.2 = follower, 2.3 = leader, 2.4 = front |
+| 보정 파일 | `calibration/` (2026-10-23 이 컴퓨터에서 보정) |
+| 모델 | [jammin0319/act_so101_ball_to_bowl_v1](https://huggingface.co/jammin0319/act_so101_ball_to_bowl_v1) @ `dd639021a17f8e7584baa100d40a5127f72ba14f`. ACT, 체크포인트 020000~140000(학습 140,000 step, batch 8, lr 1e-5) |
+| 데이터셋 | [jammin0319/so101_ball_to_bowl_v1](https://huggingface.co/datasets/jammin0319/so101_ball_to_bowl_v1) @ `9a4f2b86df9c171c725fbc7c2ce9af37e4b35f08`. 100 에피소드, 45,467 프레임, 30fps, 작업 "Pick up the ball and place it in the bowl" |
+| 데이터 폴더 | `~/jammin_so101_local` (models, hf_home, datasets, logs, snapshots) |
 
-상태와 검증 결과는 [docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)에 있다. 다른 PC에서 재현하는 절차는 [docs/REPRODUCE.md](docs/REPRODUCE.md)에 있다.
+## 1. 처음부터 재현(새 Ubuntu 24.04에서 순서대로)
 
-## 현재 상태 (2026-10-08, 연구실 PC)
+준비: NVIDIA 드라이버 570.86 이상(`nvidia-smi`로 확인), `git`, `curl`. CUDA Toolkit은 필요 없다(PyTorch 휠에 포함).
 
-| 구분 | 상태 |
+```bash
+# 1) 받기(공개 저장소)
+git clone https://github.com/jaemin0319/so101-ws.git ~/so101-ws
+cd ~/so101-ws
+
+# 2) conda 환경 jammin_so-arm 만들기 + lock 설치 + GPU 포함 점검(10~20분, 약 5 GB)
+bash scripts/setup_ubuntu.sh --install-miniforge   # conda가 없을 때. 이미 있으면 --install-miniforge 빼고 실행
+#   다시 실행해도 안전(같은 환경을 같은 스펙으로 갱신). 끝에 check_env 결과가 FAIL 0이어야 한다.
+
+# 3) USB 시리얼 권한(sudo). 그다음 재부팅(또는 로그아웃 후 다시 로그인)
+bash scripts/setup_system.sh --add-dialout
+
+# 4) 모델 받기(재부팅 후). 4.3 GB, 끝나면 원격 파일 78개와 크기를 대조한다
+cd ~/so101-ws
+bash scripts/download.sh model
+```
+
+장치를 0절의 USB 배치대로 꽂고 확인한다.
+
+```bash
+bash scripts/check_devices.sh           # 포트·카메라 목록, 권한, config/so101.env 경로가 있는지
+source scripts/activate.sh              # conda 환경 + 설정 불러오기(새 터미널마다)
+python scripts/find_arms.py             # 팔 두 대의 모터 전압으로 leader/follower 판정(읽기 전용, 안 움직임)
+python scripts/cam_diag.py              # front/wrist를 한 장씩 찍고, front를 학습 화면과 나란히 비교한 이미지 저장
+```
+
+**다른 PC에서**
+- 팔 포트(by-id)는 보드 시리얼 번호 기준이라 그대로 맞는다.
+- 카메라 경로(by-path)는 PC의 USB 구조에 따라 달라진다.
+  1. `python scripts/cam_diag.py --all`로 모든 카메라를 찍어 front/wrist를 찾는다.
+  2. `config/so101.env`의 `SO101_CAM_FRONT`, `SO101_CAM_WRIST`를 고친다.
+- 팔 포트를 다시 정해야 하면 `python scripts/find_arms.py --write`로 설정 파일에 바로 기록한다.
+
+## 2. 매번 쓰는 명령
+
+```bash
+cd ~/so101-ws
+source scripts/activate.sh               # 새 터미널마다. conda init 없이도 된다
+
+python scripts/cam_monitor.py            # 카메라 확인 창: o = 학습 front 화면 겹치기, s = 저장, q = 종료
+bash scripts/teleop.sh                   # leader → follower 따라 움직이기(Ctrl+C 종료)
+bash scripts/rollout.sh                  # 모델 실행: 체크포인트 100000, 시간 제한 없음(Ctrl+C 종료)
+```
+
+- **rollout 화면:** `rollout.sh`를 실행하면 브라우저 **http://127.0.0.1:8765** 에서 모델이 받는 카메라 화면(위 front, 아래 wrist)을 볼 수 있다.
+- **카메라 충돌:** 카메라는 한 프로그램만 열 수 있다. `cam_monitor.py` 창은 닫고 `teleop`·`rollout`을 실행한다.
+- **종료할 때 팔 동작:**
+  - teleop을 `Ctrl+C`로 멈추면 follower 토크가 꺼져 팔이 힘없이 내려온다. 손으로 받친다.
+  - rollout을 멈추면 팔이 시작 자세로 천천히 돌아간다.
+
+### rollout 옵션
+
+| 명령 | 뜻 |
 |---|---|
-| 소프트웨어 | `SOFTWARE_PREPARED` — 고정 설치, 무로봇 검사 `tools/verify_offline.py` 58/58 PASS, 별도 clone·별도 캐시 재설치 통과(46개 배포본 버전·파일 해시가 같음) |
-| 실제 로봇 | `NOT VERIFIED` — 모터 통신·보정·추종을 아직 실행하지 않음 |
-| 친구 PC 재현 | `NOT VERIFIED` |
-| Ubuntu 22.04 / ROS 2 Humble | **지원 검증 전**. 검증한 환경은 Ubuntu 24.04 x86_64뿐이다. 22.04 기본 Python은 3.10이고 LeRobot v0.6.1은 Python 3.12 이상이 필요하므로, `python3.12`가 없으면 `scripts/install.sh`가 중단된다 |
+| `bash scripts/rollout.sh --step 140000` | 다른 체크포인트(020000 040000 060000 080000 100000 120000 140000) |
+| `bash scripts/rollout.sh --n-action-steps 20` | 추론 빈도. 모델은 한 번에 동작 100개(`chunk_size`)를 예측하고, 그중 N개를 실행한 뒤 다시 추론한다. 기본 100 = 30fps에서 3.3초마다, 20 = 0.67초마다, 1 = 매 프레임 |
+| `bash scripts/rollout.sh --ensemble` | 매 프레임 추론하고 겹치는 예측을 가중 평균(temporal ensembling, `n_action_steps=1`, 계수 0.01). 반응이 빠르고 부드럽다. 이 GPU에서 추론 1회 15.7 ms(30fps 한 프레임 33 ms 안) |
+| `bash scripts/rollout.sh --ensemble 0.05` | ensembling 계수 지정(클수록 이전 예측 비중이 커져 부드럽지만 반응이 느림) |
+| `bash scripts/rollout.sh --duration 60` | 60초 뒤 종료(기본 0 = 무제한) |
+| `bash scripts/rollout.sh --no-view` | 브라우저 화면 없이 `lerobot-rollout`만 실행 |
+| `bash scripts/rollout.sh --dry-run` | 실행할 명령만 출력 |
+| `bash scripts/rollout.sh --check` | 로봇·카메라를 열지 않고 lerobot이 해석한 설정(n_action_steps, 카메라 MJPG·회전 등)만 출력 |
 
-## LeRobot 설치 방식
+### 스크립트가 실제로 실행하는 명령(이 컴퓨터 값)
 
-- **고정 버전**: 태그 `v0.6.1` = 커밋 `7e241bd630a3719a56157a497ce5d08f244784f1`. `scripts/install.sh`가 이 SHA를 `external/lerobot/`(Git 제외)에 받는다. 원본 참조와 검증용이며 수정하지 않는다.
-- **설치 산출물**: PyPI `lerobot-0.6.1-py3-none-any.whl`. sha256은 `lock/uv.lock`에 고정되어 있다.
-- **PyPI 휠을 쓰는 이유**: `external/lerobot`을 path(또는 git) 의존성으로 설치하면 uv가 그 `pyproject.toml`의 `tool.uv.sources`를 함께 적용한다. 그 설정이 linux torch를 CUDA 12.8 인덱스로 지정하고 있어서, CPU 인덱스 지정과 충돌한다(실측). 원본을 고치지 않고 CPU 환경을 만들기 위해 같은 릴리스의 휠을 쓴다.
-- **소스 동일성 검사**: 휠의 패키지 파일 504개가 고정 SHA의 `src/lerobot` 파일과 sha256이 같음을 확인했다. `scripts/so101 doctor`가 실행될 때마다 설치된 504개 파일을 `external/lerobot`과 바이트 단위로 다시 비교한다.
-- **의존성 잠금**
-  - `lock/pyproject.toml`: `lerobot[feetech]==0.6.1`과 torch·torchvision. 이 두 패키지만 CPU 인덱스(`https://download.pytorch.org/whl/cpu`)로 받고 나머지는 PyPI에서 받는다.
-  - `lock/uv.lock`: resolver 기준 시각을 고정 커밋 시각으로 두고 실제로 해결한 결과다. 46개 패키지, 모두 해시가 있다.
-  - 설치는 `uv sync --locked`만 하며 재해결하지 않는다.
-  - 공식 `uv.lock`과의 차이는 torch·torchvision의 CPU 변형(그리고 CPU 빌드에 필요 없는 CUDA 패키지 제외)뿐이다. 근거는 [docs/REFERENCES.md](docs/REFERENCES.md)에 있다.
-
-## 0. 준비물
-
-- Ubuntu 24.04 x86_64, `git`, `curl`, `python3.12`(기본 포함), 인터넷
-- 작업공간 파일시스템 여유 공간 **약 3 GB 이상**
-  - 새로 설치할 때 실측: `.venv` 1.2 GB, uv 캐시 1.1 GB, `external/` 33 MB, `.tools/` 47 MB, 합계 약 2.4 GB
-- 실기에는 추가로 다음이 필요하다.
-  - 리더·팔로워 각각의 통신 보드, USB, 전원
-  - USB 시리얼 권한(아래 3)
-  - 로봇 옆에서 팔을 받치고 전원을 끊을 수 있는 작업자
-
-## 1. 설치
+`source scripts/activate.sh` 다음에 그대로 붙여 넣어도 같다.
 
 ```bash
-git clone <이 저장소 URL> ~/so101_ws      # 홈에 공간이 없으면 다른 파일시스템에 clone하고 ~/so101_ws 링크
-cd ~/so101_ws
-scripts/install.sh                         # 다시 실행하면 정상 환경은 재사용하고, 누락·부분 설치는 복구한다
-scripts/so101 doctor                        # 소프트웨어 점검(로봇·포트 설정 불필요). 종료 코드 0=OK 1=FAIL 2=WARN만
+# leader → follower (scripts/teleop.sh)
+lerobot-teleoperate \
+  --robot.type=so101_follower \
+  --robot.port=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90151504-if00 \
+  --robot.id=so101_follower \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90151751-if00 \
+  --teleop.id=so101_leader
+
+# 모델 실행 (scripts/rollout.sh --ensemble). 브라우저 화면이 필요 없으면 첫 줄을 lerobot-rollout으로
+python scripts/rollout_view.py \
+  --strategy.type=base \
+  --policy.path=$HOME/jammin_so101_local/models/act_so101_ball_to_bowl_v1/checkpoints/100000/pretrained_model \
+  --policy.n_action_steps=1 \
+  --policy.temporal_ensemble_coeff=0.01 \
+  --device=cuda \
+  --robot.type=so101_follower \
+  --robot.port=/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B90151504-if00 \
+  --robot.id=so101_follower \
+  --robot.cameras="{front: {type: opencv, index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:2.4:1.0-video-index0, width: 640, height: 480, fps: 30, fourcc: MJPG, rotation: 180}, wrist: {type: opencv, index_or_path: /dev/v4l/by-path/pci-0000:00:14.0-usb-0:2.1:1.0-video-index0, width: 640, height: 480, fps: 30, fourcc: MJPG}}" \
+  --fps=30
 ```
 
-- 설치 파일이 손상된 것 같으면 `scripts/install.sh --repair`를 실행한다. 캐시 없이 다시 받는다.
-- `.venv`의 Python이 다르면 `--reset-venv`를 쓴다. 기존 `.venv`는 지우지 않고 `.venv.broken-<시각>`으로 옮긴다.
-- ROS가 `.bashrc`에서 source되어 있어도 된다. `scripts/install.sh`, `scripts/so101`이 `PYTHONPATH`·`PYTHONHOME`·`LD_LIBRARY_PATH`를 제거하고 실행한다.
-  - `.venv/bin/python`을 직접 실행하면 이 격리가 적용되지 않는다.
+`HF_LEROBOT_CALIBRATION`(보정 파일 위치)은 `activate.sh`가 이 저장소의 `calibration/`으로 정한다.
+- 다시 보정하면(`lerobot-calibrate`, 또는 연결할 때 lerobot이 물어볼 때) 이 폴더의 JSON이 바뀐다.
+- `git diff`로 확인하고 커밋한다.
 
-## 2. 설정
+## 3. 문제 해결(이 컴퓨터에서 실제로 겪은 것)
 
-```bash
-cp configs/robot.example.yaml configs/robot.local.yaml   # Git 제외 파일
-```
-
-- `leader`/`follower`의 `id`(장치 ID)와 `port`를 채운다.
-  - `id`는 물리 팔 라벨과 같은 이름으로 정한다. 보정 파일 이름이 된다(모터 ID 1~6과 다름).
-  - `port`는 다른 PC 값을 복사하지 말고 아래 4에서 다시 확인한다.
-- 보정 파일은 기본으로 `calibration/`(Git 제외)에 저장된다. 경로는 공식 형식을 따른다.
-  - `calibration/robots/so_follower/<follower id>.json`
-  - `calibration/teleoperators/so_leader/<leader id>.json`
-
-## 3. USB 시리얼 권한 (실기를 하는 PC에서 한 번)
-
-```bash
-sudo usermod -aG dialout $USER     # 사용자가 직접 실행
-# 로그아웃 후 다시 로그인(SSH는 재접속). 확인: id -nG | grep dialout
-```
-
-- `chmod 666/777`은 쓰지 않는다.
-- `brltty`·`ModemManager`는 실제로 포트가 사라지거나 점유되는 증상이 있을 때만 조치한다([docs/HARDWARE.md](docs/HARDWARE.md)).
-
-## 4. 포트 식별
-
-```bash
-scripts/so101 ports              # by-id/by-path, 실제 장치, VID:PID, serial (읽기 전용)
-scripts/so101 find-port          # 공식 lerobot-find-port: 안내에 따라 해당 보드 USB만 뽑고 Enter
-scripts/so101 doctor --scope hardware   # 포트·권한·점유·설정·보정 파일 점검(포트를 열지 않음)
-```
-
-- 보드를 한 대씩 연결하며 역할(leader/follower)을 확인한다.
-- by-id가 보드마다 고유하면 by-id를 쓴다.
-- serial이 없거나 중복이면 by-path를 쓰고, 항상 같은 USB 단자에 꽂는다.
-
-## 5. 실물·모터 확인 (읽기 전용)
-
-먼저 [docs/HARDWARE.md](docs/HARDWARE.md)의 실물 확인표를 채운다(전압·어댑터·배선). 그다음 실행한다.
-
-```bash
-scripts/so101 probe follower     # ID·모델·펌웨어·위치·토크·보정 레지스터 읽기. 모터에 쓰지 않음
-scripts/so101 probe leader
-scripts/so101 probe follower --scan   # 응답이 없을 때만: 공식 scan_port로 baud별 broadcast ping
-```
-
-- 6개가 모두 응답하고 모델이 일치하면 모터 설정(setup-motors)을 **건너뛴다**.
-- 응답이 없으면 다음 순서로 확인한다: 전원 → 케이블 → 보드 모드 → 포트 → baud.
-- ID 누락이나 충돌이 확인됐을 때만 아래를 실행한다. 공식 안내대로 모터를 **하나씩** 연결한다.
-
-```bash
-scripts/so101 setup-motors follower   # (필요할 때만)
-```
-
-## 6. 보정
-
-```bash
-scripts/so101 calibrate follower   # 팔로워는 토크가 켜졌다가 보정 중 꺼진다 → 팔을 받친다
-scripts/so101 calibrate leader
-```
-
-- 공식 순서: 모든 관절을 가동 범위 가운데에 두고 Enter → wrist_roll을 제외한 관절을 끝에서 끝까지 움직임 → Enter.
-- 이미 보정 파일이 있으면 공식 프롬프트가 묻는다: Enter는 파일을 모터에 기록, `c`는 다시 보정.
-- 백업은 [docs/HARDWARE.md](docs/HARDWARE.md#보정-백업복원)를 따른다.
-
-## 7. 추종 (공식 lerobot-teleoperate)
-
-```bash
-scripts/so101 teleop --dry-run         # 공식 명령·인자 파싱만 확인(장치 열지 않음)
-scripts/so101 teleop --time-s 30       # 첫 시험: 짧게, 관절 하나씩 작은 움직임
-scripts/so101 teleop                   # 시간 제한 없음(설정 teleop.time_s를 따름)
-```
-
-`teleop`은 공식 명령 전에 다음을 확인하고, 하나라도 맞지 않으면 실행하지 않는다.
-- 포트, 권한, 점유
-- 두 보정 파일이 있는지
-- probe로 6개 모터 응답, 펌웨어 동일, 보정 파일과 레지스터 일치
-
-보정 파일이 없거나 레지스터와 다르면 공식 teleop이 대화형 보정으로 넘어가므로, 이 경우는 실행을 거부하고 `calibrate`를 안내한다. 이후 시작 자세 차이 표와 현장 확인 목록을 보여 주고 `yes` 입력을 받는다.
-
-- `max_relative_target`(설정 파일)은 매 주기 **현재 위치 기준 목표 오프셋**만 제한한다.
-  - 단위: 몸체는 도, gripper는 0~100
-  - 속도나 충돌 안전을 보장하지 않는다.
-  - 공식 권장값은 없다. 쓰려면 출처 없는 실기 후보임을 알고 작은 값부터 확인한다.
-- 실제 루프 Hz, 추종 루프 구간(첫/마지막 루프 출력 시각), 종료·정리 결과는 `logs/runs.jsonl`에, 원본 출력은 `logs/teleop-*.log`에 남는다.
-
-### 종료
-
-1. 리더를 쉬는 자세로 천천히 옮겨 팔로워도 내려오게 한다.
-2. **팔로워를 손으로 받친다.**
-3. `Ctrl+C`를 누른다. 공식 코드가 정리하면서 토크를 해제한다.
-4. 래퍼는 공식 프로세스가 끝난 뒤 양팔에 토크 해제를 **각각 독립적으로 한 번 더** 시도하고, 결과를 성공/실패/확인 불가로 출력·기록한다.
-   - 실패가 있으면 종료 코드는 3이다.
-5. 응답이 없거나 오류가 반복되면 팔로워 전원을 차단한다(받친 상태에서).
-
-`--time-s`나 `teleop.time_s`로 시간이 끝나도 토크가 해제되어 팔이 처질 수 있다. 그 전에 쉬는 자세와 지지를 준비한다.
-
-USB·통신이 끊기면 토크 해제가 모터에 전달되지 않을 수 있다. SSH가 끊길 때도, tmux를 쓸 때도 안전은 보장되지 않는다. 물리적 지지와 전원 차단이 기본이다.
-
-### 다시 실행
-
-종료 후 같은 명령을 다시 실행하면 된다. 실행할 때마다 사전 점검이 다시 수행된다.
-
-## 파일
-
-| 경로 | 역할 | Git |
+| 증상 | 원인 | 해결 |
 |---|---|---|
-| `lock/lerobot.env` | LeRobot 태그·SHA, Python minor, uv 버전·체크섬, CPU 인덱스 | 커밋 |
-| `lock/pyproject.toml`, `lock/uv.lock` | 설치기가 소비하는 의존성 정의와 잠금(해시) | 커밋 |
-| `configs/robot.example.yaml` | 설정 예시 | 커밋 |
-| `scripts/install.sh` | 설치·재사용·복구·(유지보수) `--relock` | 커밋 |
-| `scripts/so101`, `scripts/so101.py` | 환경 격리 진입점 / doctor·ports·find-port·probe·setup-motors·calibrate·teleop | 커밋 |
-| `tools/verify_offline.py` | 하드웨어 없는 검증(가짜 서보 버스 pty, 신호·정리 시험). 운영 CLI 아님 | 커밋 |
-| `tools/lock_tools.py` | 공식 lock과 비교(유지보수) | 커밋 |
-| `.venv/`, `.tools/`, `external/lerobot/`, `.cache/`, `.tmp/`, `logs/`, `calibration/`, `configs/*.local.yaml` | PC별 산출물 | 제외 |
+| `conda: command not found`, `lerobot-teleoperate: command not found` | 설치 스크립트가 `~/.bashrc`를 고치지 않음(`conda init` 안 함) | `source scripts/activate.sh`. 또는 `eval "$(~/miniforge3/bin/conda shell.bash hook)" && conda activate jammin_so-arm` |
+| 포트가 보이는데(`/dev/ttyACM0` `crw-rw---- root dialout`) 열리지 않음 | 사용자가 dialout 그룹이 아님 | `bash scripts/setup_system.sh --add-dialout` 후 재부팅. 재부팅 전 임시로는 `sg dialout -c "명령"` |
+| front 카메라가 깜빡이고 일부가 깨지거나 좌우로 밀려 반전된 것처럼 보임 | 카메라 2대·보드 2개가 USB 2.0 허브 하나를 같이 쓰는데 기본 YUYV(비압축) 두 대는 대역폭 부족. front 150장 중 31~36장 깨짐 | 카메라 설정에 `fourcc: MJPG`(config 기본값). MJPG면 0장. 측정: `python scripts/cam_diag.py --bandwidth` |
+| `/dev/v4l/by-id`가 재부팅 후 다른 카메라를 가리킴 | 두 카메라 USB 시리얼이 같음(SN0001) | by-path(USB 포트 위치) 사용. 같은 허브 구멍에 꽂기 |
+| `Failed to open OpenCVCamera(...)`, `can't be used to capture by name` | 다른 프로그램(cam_monitor·teleop·rollout)이 카메라 사용 중 | 그 프로그램을 끈다. 누가 쓰는지 보려면 `fuser -v /dev/video*` |
+| `cv2.imshow` 창이 안 뜸 | lock의 OpenCV가 `opencv-python-headless` | `scripts/cam_monitor.py`(Tk 창) 사용 |
+| `--display_data=true` 실패 | rerun·foxglove(lerobot `viz` extra)가 lock에 없음 | `scripts/rollout_view.py`(rollout.sh 기본)가 브라우저로 보여 줌 |
+| `Record loop is running slower (29.8 Hz) than the target FPS (30.0 Hz)` | 카메라 fps가 아니라 제어 루프 한 바퀴(관측→추론→모터 명령)가 33.3 ms를 넘은 그 1회의 속도. 29.8Hz = 33.6 ms(0.3 ms 초과) | 가끔이면 무시. 계속 뜨거나 20Hz대로 떨어지면 원인 확인 |
+| 카메라가 USB에서 빠졌다 다시 잡힘(`journalctl -k`에 `error -71`) | 케이블·허브 전원 불안정 | 케이블·허브 점검, 장치 번호가 바뀌어도 by-path 경로는 유지됨 |
+| 데이터셋 영상을 OpenCV로 못 읽음 | 데이터셋 영상이 AV1 | PyAV(`import av`)로 디코딩 |
+| 연결할 때 보정을 다시 하라고 물음 | 보정 파일과 모터 레지스터 값이 다름 | 차이를 확인하고 필요하면 다시 보정 후 커밋 |
+| 모델 동작이 조금씩 빗나감 | 학습 데이터는 맥에서 수집(보정도 맥에서 함). 이 컴퓨터 보정 파일은 2026-10-23에 새로 한 것 | 카메라 위치를 학습 화면에 맞추고(`cam_monitor.py`의 `o`), 보정 차이를 의심 |
 
-## 라이선스·출처
+## 4. 파일
 
-이 저장소의 코드는 공식 LeRobot을 설치·호출만 하고 복사하지 않는다. 출처와 라이선스는 [docs/REFERENCES.md](docs/REFERENCES.md)에 있다(LeRobot·SO-ARM100은 Apache-2.0).
+| 경로 | 내용 |
+|---|---|
+| `config/so101.env` | 이 컴퓨터 실측 설정: 포트·ID·카메라 경로·MJPG·회전·데이터 위치·HF repo/revision·기본 체크포인트 |
+| `calibration/` | LeRobot 보정 파일(follower `robots/so_follower/so101_follower.json`, leader `teleoperators/so_leader/so101_leader.json`) |
+| `reference/front_train.jpg` | 학습 데이터 front 카메라 한 장(180도 회전 적용 후). 카메라 위치 맞춤 기준 |
+| `scripts/activate.sh` | (source) conda 환경 + 설정 불러오기 |
+| `scripts/teleop.sh` | leader → follower |
+| `scripts/rollout.sh` | 모델 실행(체크포인트·추론 빈도·ensembling·시간 제한·화면 옵션, `--check`) |
+| `scripts/rollout_view.py` | rollout과 함께 브라우저 카메라 화면(카메라를 따로 열지 않음) |
+| `scripts/cam_monitor.py` | 카메라 확인 창(Tk), 학습 화면 겹치기 |
+| `scripts/cam_diag.py` | 카메라 경로 확인 사진, 학습 화면 비교, YUYV·MJPG 깨짐 측정 |
+| `scripts/find_arms.py` | 모터 전압으로 leader/follower 판정(읽기 전용) |
+| `scripts/download.sh` | 모델·데이터셋 받기 + 원격과 대조 |
+| `scripts/setup_ubuntu.sh` | conda 환경 생성·갱신, lock 설치, 점검 |
+| `scripts/setup_system.sh` | (sudo) dialout 그룹, v4l-utils |
+| `scripts/check_env.py` | 소프트웨어·CUDA 점검(29개 항목) |
+| `scripts/check_devices.sh` | 포트·카메라 목록·권한, 설정 경로 존재 확인(장치를 열지 않음) |
+| `environment.yml` | conda 계층: python 3.12.15, pip 26.2.1, ffmpeg 8.1.1 |
+| `requirements/` | `pyproject.toml` → `uv.lock` → `linux-cu128.lock.txt`(pip 해시 고정 99개), `build.lock.txt`(feetech 빌드용 setuptools) |
+| `scripts/make_lock.sh`, `scripts/check_repo.py` | (유지보수) lock 재생성, 정적 점검 |
+| `.github/workflows/ci.yml` | 새 Ubuntu 24.04 러너에서 설치·재실행·점검·rollout 설정 해석 |
+
+## 5. 설치 방식과 유지보수
+
+- **설치 순서**
+  1. conda는 python·pip·ffmpeg만 설치한다.
+  2. 나머지 Python 패키지는 모두 `pip install --require-hashes --no-deps -r requirements/linux-cu128.lock.txt`로 설치한다. 다시 해결하지 않으므로 torch 등이 다른 버전으로 덮어써지지 않는다.
+- **설치 스크립트가 하지 않는 것:** `setup_ubuntu.sh`는 apt·sudo·그룹 변경, 드라이버 변경, `~/.bashrc` 변경을 하지 않는다. 시스템 변경은 `setup_system.sh`의 명시 옵션으로만 한다.
+- **의존성 업데이트**
+  1. `requirements/pyproject.toml`을 고친다.
+  2. `UV=<uv 0.12.23> UV_PYTHON=<python3.12> scripts/make_lock.sh`로 lock을 다시 만든다.
+  3. `python3 scripts/check_repo.py`로 점검한다.
+  4. 커밋한 뒤 `bash scripts/setup_ubuntu.sh`를 다시 실행한다.
+- **CI:** push할 때마다 GitHub Actions가 새 Ubuntu 24.04에서 처음부터 설치해 본다. GPU·USB 장치는 CI로 확인되지 않는다.
+- **환경 지우기:** `conda env remove -n jammin_so-arm`

@@ -1,21 +1,33 @@
-# 환경·도구·외부 원본
-.venv/
-.venv.broken-*/
-.tools/
-external/
-# 캐시·임시
+# 비밀값(토큰·인증 정보는 올리지 않는다)
+.git-credentials
+token
+*.token
+
+# 캐시·설치기·환경
 .cache/
-.tmp/
+.venv/
 __pycache__/
 *.pyc
-# PC별·실기 산출물
-configs/*.local.yaml
-calibration/
-calibration-backup*/
+*.partial
+
+# 데이터·모델·실험 결과(Hugging Face에서 받는다: scripts/download.sh. 기본 위치는 저장소 밖 ~/jammin_so101_local)
+datasets/
+models/
+outputs/
+wandb/
 logs/
-*.tar.gz
-# 비밀정보
-.env
-.env.*
-*.pem
-*.key
+snapshots/
+hf_home/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.mp4
+*.parquet
+
+# 점검 결과
+check_env*.json
+
+# 편집기·OS
+.vscode/
+.DS_Store

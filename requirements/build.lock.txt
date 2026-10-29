@@ -1,0 +1,6 @@
+# 자동 생성 파일(scripts/make_lock.sh). feetech-servo-sdk(sdist) 빌드용 — linux-cu128.lock.txt의 setuptools와 같은 버전·해시.
+--index-url https://pypi.org/simple
+
+setuptools==81.0.0 ; platform_machine == 'x86_64' and sys_platform == 'linux' \
+    --hash=sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a \
+    --hash=sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6

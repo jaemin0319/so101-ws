@@ -1,0 +1,82 @@
+# GPU·로봇·카메라가 없는 GitHub 호스팅 러너(새 Ubuntu 24.04)에서 처음부터 재현되는지 검사한다.
+# - static: 문법·shellcheck·정적 일관성(check_repo)·OS 차단 동작
+# - install: Miniforge → setup_ubuntu.sh(실제 conda 환경 jammin_so-arm 생성 + lock 설치) → 재실행(중복 생성·삭제 없음)
+#            → check_env --gpu skip → activate.sh → 모델 설정 파일만 받아 rollout 명령을 lerobot 설정으로 해석(--check)
+# 이 CI 통과는 RTX 5060 GPU·CUDA 연산이나 USB 팔·카메라 동작을 증명하지 않는다(docs/CURRENT_STATE.md).
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Bash 문법·shellcheck
+        run: |
+          for f in scripts/*.sh; do bash -n "$f"; done
+          shellcheck -x -S warning scripts/*.sh
+      - name: Python 구문·정적 일관성
+        run: |
+          python3 -m py_compile scripts/*.py
+          python3 scripts/check_repo.py
+      - name: 옵션·도움말·대상 OS 차단
+        run: |
+          for s in setup_ubuntu setup_system teleop rollout download; do bash "scripts/$s.sh" --help >/dev/null; done
+          python3 scripts/check_env.py --help >/dev/null
+          printf 'ID=debian\nVERSION_ID="12"\n' > /tmp/os-release-debian
+          set +e
+          SO101_OS_RELEASE=/tmp/os-release-debian bash scripts/setup_ubuntu.sh --dry-run; rc=$?
+          set -e
+          test "$rc" = 2
+          set +e; bash scripts/setup_ubuntu.sh --env-name base --dry-run; rc=$?; set -e
+          test "$rc" = 2
+  install:
+    runs-on: ubuntu-24.04
+    needs: static
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: 디스크 여유 확보(CUDA 휠 약 5 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          miniforge-version: 26.7.2-1
+          auto-activate: false
+          activate-environment: ""
+      - name: 설치(1회차, 기본 환경 이름 jammin_so-arm)
+        run: bash scripts/setup_ubuntu.sh --conda "$CONDA/bin/conda" --gpu skip
+      - name: 재실행(같은 환경 갱신, 삭제·중복 생성 없음)
+        run: |
+          bash scripts/setup_ubuntu.sh --conda "$CONDA/bin/conda" --gpu skip
+          n=$("$CONDA/bin/conda" env list --json | python3 -c 'import json,sys,os; print(sum(os.path.basename(p)=="jammin_so-arm" for p in json.load(sys.stdin)["envs"]))')
+          test "$n" = 1
+      - name: activate.sh·실행 스크립트(장치 없이)
+        run: |
+          bash -c 'source scripts/activate.sh && python -c "import lerobot, sys; print(sys.prefix, lerobot.__version__)"'
+          bash scripts/teleop.sh --dry-run
+          bash scripts/rollout.sh --dry-run
+          bash -c 'source scripts/activate.sh && for s in find_arms cam_diag cam_monitor; do python scripts/$s.py --help >/dev/null; done'
+      - name: 모델 설정만 받아 rollout 명령 해석(--check, 가중치·로봇 없이)
+        run: |
+          bash -c 'source scripts/activate.sh && hf download "$SO101_MODEL_REPO_ID" --revision "$SO101_MODEL_REVISION" \
+            --include "checkpoints/$SO101_CHECKPOINT/pretrained_model/*.json" \
+            --local-dir "$SO101_MODEL_DIR/$(basename "$SO101_MODEL_REPO_ID")"'
+          bash scripts/rollout.sh --check
+          bash scripts/rollout.sh --n-action-steps 20 --check
+          bash scripts/rollout.sh --ensemble --check
+      - name: 점검 결과 보관
+        if: always()
+        run: |
+          p=$("$CONDA/bin/conda" env list --json | python3 -c 'import json,sys,os; print(next(p for p in json.load(sys.stdin)["envs"] if os.path.basename(p)=="jammin_so-arm"))')
+          "$p/bin/python" scripts/check_env.py --gpu skip --json check_env_ci.json || true
+          bash scripts/check_devices.sh || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: check_env_ci
+          path: check_env_ci.json

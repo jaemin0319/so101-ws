@@ -1,0 +1,40 @@
+# Linux x86_64 + CUDA 12.8(cu128) 의존성 잠금용 가상 프로젝트(패키지 아님).
+# - 이 파일 → uv.lock(해시 포함 해결 결과) → linux-cu128.lock.txt(pip --require-hashes 설치용)로 내보낸다.
+#   재생성: scripts/make_lock.sh (유지보수자만. 일반 설치는 lock.txt만 쓴다)
+# - 기준: 맥 연구 환경(데이터 수집)의 고정 LeRobot v0.6.1(7e241bd630a3719a56157a497ce5d08f244784f1)과
+#   같은 해결 기준 시각(exclude-newer)·제약을 쓴다. torch/torchvision은 공식 LeRobot v0.6.1 pyproject와 같은
+#   PyTorch cu128 인덱스에서 받는다(공식 주석: "cu128 wheels keep broad hardware reach; the driver floor is 570.86").
+# - extras: feetech(SO-101 모터) + training(= dataset[datasets·pyarrow·av·torchcodec] + wandb + accelerate).
+#   macOS 전용(coremltools 등)과 pynput(hardware extra)은 넣지 않는다.
+[project]
+name = "so101-setting-linux-cu128"
+version = "0.0.0"
+description = "Pinned Linux x86_64 CUDA 12.8 runtime for SO-101 with official LeRobot v0.6.1 (conda env + pip)"
+requires-python = "==3.12.*"
+dependencies = [
+    "lerobot[feetech,training]==0.6.1",
+    # lerobot core 의존성. cu128 인덱스로 한정하기 위해 이름만 명시(버전 범위는 lerobot이 정한다).
+    "torch",
+    "torchvision",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+# 맥 연구 환경 lock과 같은 기준 시각(고정 커밋 2026-08-03T14:05:01Z, lerobot 업로드만 14:30:00Z).
+exclude-newer = "2026-08-03T14:05:01Z"
+exclude-newer-package = { lerobot = "2026-08-03T14:30:00Z" }
+# 공식 uv.lock과 같은 버전으로 맞춘다: fsspec(datasets 상한 때문에 공식 lock도 2026.2.0),
+# protobuf(wandb 의존성. 제약이 없으면 7.35.1이 선택되지만 공식 lock은 6.32.0).
+constraint-dependencies = ["fsspec==2026.2.0", "protobuf==6.32.0"]
+# 휠이 없는 feetech-servo-sdk(sdist) 빌드용.
+build-constraint-dependencies = ["setuptools==81.0.0"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
