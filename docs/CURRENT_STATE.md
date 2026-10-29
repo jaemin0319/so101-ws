@@ -8,7 +8,7 @@
 |---|---|---|
 | conda 환경 `jammin_so-arm` + lock 99개 설치 | `VERIFIED`(기준 컴퓨터) | 계정 이름 변경 후 재설치. `check_env.py --gpu required` PASS 29, FAIL 0 (2026-10-29) |
 | RTX 5060 Laptop(sm_120) CUDA 연산 | `VERIFIED`(기준 컴퓨터) | 드라이버 595.99.02, 행렬곱·cuDNN conv·ResNet18 GPU 순전파 통과 |
-| 새 Ubuntu 24.04에서 처음부터 설치 | CI 결과 참고 | GitHub Actions ubuntu-24.04 러너(GPU 없음). 실행 기록은 저장소 Actions 탭 |
+| 새 Ubuntu 24.04에서 처음부터 설치 | `VERIFIED`(CI, GPU 없음) | GitHub Actions run 40886998255(커밋 `fd3f9a5`): static 4초·install 4분 54초 success. `jammin_so-arm` 새로 생성 → lock 99개 → `check_env --gpu skip` PASS 24·FAIL 0·SKIP 1(GPU) → 재실행 중복 없음 → `rollout.sh --check` 기본·20·ensemble 모두 의도한 값 |
 | 팔 두 대 인식·모터 응답·leader/follower 구분 | `VERIFIED`(2026-10-23) | 두 포트 모두 ID 1~6 응답, 전압 12V/6V로 구분(WORKLOG) |
 | 시리얼 권한(dialout) | `VERIFIED`(2026-10-23) | 그룹 추가·재부팅 후 두 포트 읽기·쓰기 가능 |
 | 카메라 2대 30fps, front/wrist 대응, rotation 180 | `VERIFIED`(2026-10-23) | 실제 프레임 촬영·학습 화면과 비교 |
